@@ -128,5 +128,5 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-*/train_data.pkl
-*/val_data.pkl
+*/**/train_data.pkl
+*/**/val_data.pkl
