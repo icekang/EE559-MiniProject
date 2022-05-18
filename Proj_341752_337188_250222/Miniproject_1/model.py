@@ -90,9 +90,11 @@ class Model(nn.Module):
         #: test_input : tensor of size (N1 , C, H, W) that has to be denoised by the trained
         # or the loaded network .
         #: returns a tensor of the size (N1 , C, H, W)
-        test_input = test_input.float()
+        test_input = test_input.float() / 255.0
         with torch.no_grad():
-            return self.forward(test_input)
+            output = self.forward(test_input)
+            output = output * 255.0
+            return torch.clip(output, 0.0, 255.0)
     
     def forward(self, x):
         skips = []
