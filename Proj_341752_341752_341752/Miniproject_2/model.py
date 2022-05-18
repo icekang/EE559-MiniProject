@@ -2,7 +2,7 @@ import torch
 from torch.nn.functional import fold, unfold
 import numpy as np
 
-def Conv():
+def Conv2d():
     def __init__(self, input_shape, kernel_size, depth, stride):
         # Batch size?
         input_depth, input_height, input_width = input_shape

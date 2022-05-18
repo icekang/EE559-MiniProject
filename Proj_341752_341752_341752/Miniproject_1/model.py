@@ -1,6 +1,8 @@
 import torch
 from torch import nn, functional as F, optim
 from torch.utils.data import DataLoader
+from pathlib import Path
+from Miniproject_1 import device
 
 ### For mini - project 1
 class Model(nn.Module):
@@ -45,7 +47,8 @@ class Model(nn.Module):
 
     def load_pretrained_model( self ) -> None :
         ## This loads the parameters saved in bestmodel.pth into the model
-        state_dict = torch.load('bestmodel.pth')
+        model_path = Path(__file__).parent / "bestmodel.pth"
+        state_dict = torch.load(model_path)
         self.load_state_dict(state_dict)
 
     def train( self, train_input, train_target, num_epochs ) -> None :
@@ -55,6 +58,11 @@ class Model(nn.Module):
         self.optimizer = optim.Adam(self.parameters(), lr=0.0001, betas=(0.9, 0.99), eps=1e-08)
         print_every = 100
         best_loss = 2e9
+
+        train_input = train_input.float()
+        train_target = train_target.float()
+        train_input = DataLoader(train_input, batch_size=64, shuffle=False)
+        train_target = DataLoader(train_target, batch_size=64, shuffle=False)
 
         print('Training Starts')
         for epoch in range(num_epochs):
@@ -82,6 +90,7 @@ class Model(nn.Module):
         #: test_input : tensor of size (N1 , C, H, W) that has to be denoised by the trained
         # or the loaded network .
         #: returns a tensor of the size (N1 , C, H, W)
+        test_input = test_input.float()
         with torch.no_grad():
             return self.forward(test_input)
     
