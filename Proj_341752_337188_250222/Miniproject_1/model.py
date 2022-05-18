@@ -55,12 +55,12 @@ class Model(nn.Module):
         #: train_input : tensor of size (N, C, H, W) containing a noisy version of the images
         #: train_target : tensor of size (N, C, H, W) containing another noisy version of the
         # same images , which only differs from the input by their noise .
-        self.optimizer = optim.Adam(self.parameters(), lr=0.0001, betas=(0.9, 0.99), eps=1e-08)
+        self.optimizer = optim.Adam(self.parameters(), lr=0.001, betas=(0.9, 0.99), eps=1e-08)
         print_every = 100
         best_loss = 2e9
 
-        train_input = train_input.float()
-        train_target = train_target.float()
+        train_input = train_input.float() / 255.0
+        train_target = train_target.float() / 255.0
         train_input = DataLoader(train_input, batch_size=64, shuffle=False)
         train_target = DataLoader(train_target, batch_size=64, shuffle=False)
 
@@ -82,7 +82,7 @@ class Model(nn.Module):
                     running_loss = 0.0
                     if loss < best_loss:
                         best_loss = loss
-                        torch.save(self.state_dict(), 'bestmodel.pth')
+                        torch.save(self.state_dict(), 'bestmodel_test.pth')
         print('Finised Training')
 
 
