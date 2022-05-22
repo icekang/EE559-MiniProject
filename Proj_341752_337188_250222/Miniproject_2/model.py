@@ -34,6 +34,10 @@ class Model():
     def backward(self, x):
         return self.model.backward(x)
 
+import torch
+from torch import nn
+from torch.nn.functional import fold, unfold
+
 class Conv2d():
     def __init__(self, out_channel, in_channel, kernel_size,stride = 1):
         # Batch size?
@@ -52,26 +56,28 @@ class Conv2d():
         input_height, input_width = input.size()[2:]
         self.input_shape = (input_height, input_width)
 
-        out_size = lambda s_in, ks, st: int((( s_in - (ks - 1) - 1 ) / st + 1) // 1)
-        self.output_shape = (self.out_channel, out_size(input_height, self.kernel_size, self.stride), out_size(input_width, self.kernel_size, self.stride))
+        print(input_height)
+        print(input_width)
+        print(self.kernel_size)
+        self.output_shape = (self.out_channel, self.out_size(input_height, self.kernel_size, self.stride), self.out_size(input_width, self.kernel_size, self.stride))
         self.weight_shape = (self.out_channel, self.in_channel, self.kernel_size, self.kernel_size)
-        self.weight = torch.randn(self.weight_shape)
-        self.bias = torch.randn(self.out_channel)
+        self.weight = torch.ones(self.weight_shape)
+        self.bias = torch.zeros(self.out_channel)
+    
+    def out_size(self, s_in, ks, st):
+        return int((( s_in - (ks - 1) - 1 ) / st + 1) // 1)
     
     def forward(self, input):
         if self.input_shape == None:
             self.initialize(input)
+        input = input.float()
 
-        #print(self.weight_shape)
         self.input = input
-        # change to empty
-        #print(self.weight)
         
-        # do we need to add padding? 
         unfolded = unfold(self.input, kernel_size= (self.kernel_size,self.kernel_size), stride = self.stride )
         self.output = self.weight.view(self.out_channel, -1) @ unfolded + self.bias.view(1,-1,1)
-        self.output = self.output.view(1,self.out_channel,self.input.shape[2] - self.kernel_size + 1, self.input.shape[3] - self.kernel_size + 1)     
-
+        self.output = self.output.view(input.size(0),self.out_channel,self.output_shape[1], self.output_shape[2])     
+        
         return self.output
     
     def backward(self, output_gradient):
@@ -79,33 +85,43 @@ class Conv2d():
         ks = self.weight_shape[-1] - 1
         self.output_gradient = output_gradient
         # dL/dK = X_j * output_grad
-        inp_dldK = unfold(self.input, kernel_size=self.output_gradient.size()[-2:], stride = self.stride)
-        print(self.output_gradient())
-        out_dldK = inp_dldK.transpose(1, 2).matmul(self.output_gradient.view(self.output_gradient.size(1) * self.output_gradient.size(2), -1).t()).transpose(1, 2)
+        #inp_dldK = unfold(self.input, kernel_size=self.output_gradient.size()[-2:], stride = self.stride)
+        #out_dldK = inp_dldK.transpose(1, 2).matmul(self.output_gradient.view(self.output_gradient.size(1) * self.output_gradient.size(2), -1).t()).transpose(1, 2)
         
         
         # dL/db
+        print("self.weights.size()",self.weight.size())
         # dL/dX_j = sum_i dE/dYi * Kij
         
-        
+        # self.kernel_flipped = self.weight.permute([1,0,2,3])
         self.kernel_flipped = self.weight.flip([2,3])
         
         # unstride the output gradient
-        zeros = torch.empty((x -1)* (self.stride -1)+x, y + (y-1)* (self.stride -1)).zero_()
-        zeros[::self.stride,::self.stride] = output_gradient
+        
+        # second index of zeros is output channels
+        
+        zeros = torch.empty(self.input.size(0),self.out_channel,(x-1)* (self.stride-1)+x, y + (y-1)* (self.stride -1)).zero_()
+        zeros[:,:,::self.stride,::self.stride] = output_gradient
         
         self.unstrided_gradient = zeros
+        print('self.unstrided_gradient.size()', self.unstrided_gradient.size())
+        
+        
+        unfolded = unfold(self.unstrided_gradient, kernel_size= (self.kernel_size,self.kernel_size), stride = 1, padding = (self.kernel_size - 1, self.kernel_size - 1))
+        print(unfolded)
+        print('unfolded.size()', unfolded.size())
+        
+        lhs = self.kernel_flipped.view(self.in_channel, self.kernel_size ** 2 * self.out_channel)
+        print('lhs.size()', lhs.size())
+        self.input_grad = lhs @ unfolded
+        
+        #self.input_grad = fold(self.input_grad)
+        
+        self.input_grad = self.input_grad.view(self.input.size(0),self.in_channel,self.input_shape[0], self.input_shape[1])     
+        print(self.input_grad.size())
 
-        inp_unf = unfold(self.unstrided_gradient, kernel_size=self.kernel_flipped[-2:], stride = 2, padding = (self.kernel_size - 1, self.kernel_size - 1))
-        out_unf = inp_unf.transpose(1, 2).matmul(self.kernel_flipped.view(self.kernel_flipped.size(1) * self.kernel_flipped.size(2), -1).t()).transpose(1, 2)
-        input_gradient = fold(out_unf, output_size=self.weight_shape[1:], kernel_size=(1, 1), stride=2)
 
-        # Maybe update the weights here??
-        self.weight-= self.learning_rate * out_dldK    
-        self.bias -= output_gradient
-
-        return input_gradient
-
+        return self.input_grad
 
 class NNUpsample(Module):
     def __init__(self, scale_factor):
