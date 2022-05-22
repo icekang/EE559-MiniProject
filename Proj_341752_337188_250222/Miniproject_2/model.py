@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.nn.functional import fold, unfold
+from .activations import Sigmoid, ReLU
 
 torch.set_default_dtype(torch.float64)
 
