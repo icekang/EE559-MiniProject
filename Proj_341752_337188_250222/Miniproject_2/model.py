@@ -1,11 +1,8 @@
-from black import Mode
 import torch
-from torch import nn
 from torch.nn.functional import fold, unfold
 from .activations import Sigmoid, ReLU
 from .sequential import Sequential
 from .module import Module
-
 
 torch.set_default_dtype(torch.float64)
 
@@ -23,10 +20,11 @@ class Model():
         )
     
     def forward(self, x):
+        # x = x.float() /255.0
         return self.model(x)
     
     def predict(self, test_input):
-        test_input = test_input.float() / 255.0
+        # test_input = test_input.float() / 255.0
         output = self.forward(test_input)
         output = output * 255.0
         return torch.clip(output, 0.0, 255.0)
@@ -34,9 +32,6 @@ class Model():
     def backward(self, x):
         return self.model.backward(x)
 
-import torch
-from torch import nn
-from torch.nn.functional import fold, unfold
 
 class Conv2d():
     def __init__(self, out_channel, in_channel, kernel_size,stride = 1):
@@ -56,9 +51,9 @@ class Conv2d():
         input_height, input_width = input.size()[2:]
         self.input_shape = (input_height, input_width)
 
-        print(input_height)
-        print(input_width)
-        print(self.kernel_size)
+        # print(input_height)
+        # print(input_width)
+        # print(self.kernel_size)
         self.output_shape = (self.out_channel, self.out_size(input_height, self.kernel_size, self.stride), self.out_size(input_width, self.kernel_size, self.stride))
         self.weight_shape = (self.out_channel, self.in_channel, self.kernel_size, self.kernel_size)
         self.weight = torch.ones(self.weight_shape)
@@ -70,11 +65,14 @@ class Conv2d():
     def forward(self, input):
         if self.input_shape == None:
             self.initialize(input)
-        input = input.float()
+        # input = input.float()
 
         self.input = input
         
         unfolded = unfold(self.input, kernel_size= (self.kernel_size,self.kernel_size), stride = self.stride )
+        print('unfolded.dtype', unfolded.dtype)
+        print('self.bias.dtype', self.bias.dtype)
+        print('self.weight.view(self.out_channel, -1).dtype', self.weight.view(self.out_channel, -1).dtype)
         self.output = self.weight.view(self.out_channel, -1) @ unfolded + self.bias.view(1,-1,1)
         self.output = self.output.view(input.size(0),self.out_channel,self.output_shape[1], self.output_shape[2])     
         
@@ -90,7 +88,7 @@ class Conv2d():
         
         
         # dL/db
-        print("self.weights.size()",self.weight.size())
+        # print("self.weights.size()",self.weight.size())
         # dL/dX_j = sum_i dE/dYi * Kij
         
         # self.kernel_flipped = self.weight.permute([1,0,2,3])
@@ -123,6 +121,7 @@ class Conv2d():
 
         return self.input_grad
 
+
 class NNUpsample(Module):
     def __init__(self, scale_factor):
         super(NNUpsample).__init__()
@@ -148,12 +147,30 @@ class NNUpsample(Module):
 class Upsampling(Module):
     def __init__(self, out_channel, in_channel, kernel_size, stride=1, scale_factor=2):
         super(Upsampling).__init__()
-        self.conv = Conv2d(out_channel, in_channel, kernel_size, stride)
         self.nn = NNUpsample(scale_factor)
+        self.padding = Padding((kernel_size - 1) // 2)
+        self.conv = Conv2d(out_channel, in_channel, kernel_size, stride)
 
     def forward(self, x):
-        return self.conv(self.nn(x))
+        x = self.nn.forward(x)
+        x = self.padding.forward(x)
+        return self.conv.forward(x)
 
     def backward(self, gradwrtoutput):
         x = self.nn.backward(gradwrtoutput)
+        x = self.padding.backward(x)
         return self.conv.backward(x)
+    
+
+class Padding(Module):
+    def __init__(self, padding):
+        super(Padding).__init__()
+        self.padding = padding
+
+    def forward(self, x):
+        padded = torch.zeros((x.size(0), x.size(1), x.size(2) + 2 * self.padding, x.size(3) + 2 * self.padding))
+        padded[:, :, self.padding:x.size(2) + self.padding, self.padding:x.size(3) + self.padding] = x
+        return padded
+
+    def backward(self, x):
+        return x[:, :, self.padding:-self.padding, self.padding:-self.padding]
