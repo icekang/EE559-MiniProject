@@ -7,4 +7,6 @@ Put `train_data.pkl` and `val_data.pkl` in /Proj_[SCIPER]_[SCIPER]_[SCIPER]/data
 Run
 ```python
 python .\test.py -p .\Proj_341752_337188_250222\ -d .\Proj_341752_337188_250222\data\
+
+python .\test2.py -p .\Proj_341752_337188_250222\ -d .\Proj_341752_337188_250222\data\
 ```
