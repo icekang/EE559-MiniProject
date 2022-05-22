@@ -19,14 +19,14 @@ class Model(Module):
         )
         
         # Conv2d need to be initialized by passing dummy input
-        self.forward(torch.zeros(1, 3, 512, 512))
+        # self.forward(torch.zeros((1, 3, 512, 512)))
     
     def forward(self, x):
-        # x = x.float() /255.0
+        # x = x.float()
         return self.model(x)
     
     def predict(self, test_input):
-        # test_input = test_input.float() / 255.0
+        test_input = test_input / 255.0
         output = self.forward(test_input)
         output = output * 255.0
         return torch.clip(output, 0.0, 255.0)

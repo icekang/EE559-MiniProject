@@ -22,23 +22,21 @@ class Conv2d():
         self.stride = stride
         self.input_shape = None
         self.in_channel = in_channel
+        self.weight_shape = (self.out_channel, self.in_channel, self.kernel_size, self.kernel_size)
+        self.weight = torch.randn(self.weight_shape)
+        self.bias = torch.randn(self.out_channel)
 
-    
     def set_initial(self, weight, bias):
         self.weight = weight
         self.bias = bias
 
     def initialize(self, input):
         input_height, input_width = input.size()[2:]
-        self.input_shape = (input_height, input_width)
-
+        self.input_shape = (input_height, input_width)        
         # print(input_height)
         # print(input_width)
         # print(self.kernel_size)
         self.output_shape = (self.out_channel, self.out_size(input_height, self.kernel_size, self.stride), self.out_size(input_width, self.kernel_size, self.stride))
-        self.weight_shape = (self.out_channel, self.in_channel, self.kernel_size, self.kernel_size)
-        self.weight = torch.ones(self.weight_shape)
-        self.bias = torch.zeros(self.out_channel)
     
     def out_size(self, s_in, ks, st):
         return int((( s_in - (ks - 1) - 1 ) / st + 1) // 1)
@@ -51,9 +49,9 @@ class Conv2d():
         self.input = input
         
         unfolded = unfold(self.input, kernel_size= (self.kernel_size,self.kernel_size), stride = self.stride )
-        print('unfolded.dtype', unfolded.dtype)
-        print('self.bias.dtype', self.bias.dtype)
-        print('self.weight.view(self.out_channel, -1).dtype', self.weight.view(self.out_channel, -1).dtype)
+        # print('unfolded.dtype', unfolded.dtype)
+        # print('self.bias.dtype', self.bias.dtype)
+        # print('self.weight.view(self.out_channel, -1).dtype', self.weight.view(self.out_channel, -1).dtype)
         self.output = self.weight.view(self.out_channel, -1) @ unfolded + self.bias.view(1,-1,1)
         self.output = self.output.view(input.size(0),self.out_channel,self.output_shape[1], self.output_shape[2])     
         
@@ -83,15 +81,15 @@ class Conv2d():
         zeros[:,:,::self.stride,::self.stride] = output_gradient
         
         self.unstrided_gradient = zeros
-        print('self.unstrided_gradient.size()', self.unstrided_gradient.size())
+        # print('self.unstrided_gradient.size()', self.unstrided_gradient.size())
         
         
         unfolded = unfold(self.unstrided_gradient, kernel_size= (self.kernel_size,self.kernel_size), stride = 1, padding = (self.kernel_size - 1, self.kernel_size - 1))
-        print(unfolded)
-        print('unfolded.size()', unfolded.size())
+        # print(unfolded)
+        # print('unfolded.size()', unfolded.size())
         
         lhs = self.kernel_flipped.view(self.in_channel, self.kernel_size ** 2 * self.out_channel)
-        print('lhs.size()', lhs.size())
+        # print('lhs.size()', lhs.size())
         self.input_grad = lhs @ unfolded
         
         #self.input_grad = fold(self.input_grad)

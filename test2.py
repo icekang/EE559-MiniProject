@@ -159,10 +159,10 @@ class Tests(unittest.TestCase):
         with self.subTest("Testing convolution"):
             Conv2d = model_module.Conv2d
             conv = Conv2d(3, 3, 3)
-            print((conv.forward(x) - F.conv2d(x, conv.weight,conv.bias)).abs().sum())
+            # print((conv.forward(x) - F.conv2d(x, conv.weight,conv.bias)).abs().sum())
             #F.conv2d(x, conv.weight)
-            print(conv.weight.dtype)
-            print(F.conv2d(x, conv.weight,conv.bias).dtype)
+            # print(conv.weight.dtype)
+            # print(F.conv2d(x, conv.weight,conv.bias).dtype)
             self.assertTrue(torch.allclose(conv.forward(x), F.conv2d(x, conv.weight, conv.bias)))
 
         with self.subTest("Testing sigmoid"):
