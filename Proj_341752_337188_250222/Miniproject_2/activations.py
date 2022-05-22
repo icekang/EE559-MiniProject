@@ -4,9 +4,6 @@ from .module import Module
 
 
 ################### CLASSES ###################
-
-
-
 class Sigmoid(Module):
 	def __init__(self):
 		super(Sigmoid).__init__()
