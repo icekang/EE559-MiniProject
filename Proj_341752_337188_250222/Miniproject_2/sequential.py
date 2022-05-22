@@ -1,5 +1,6 @@
-from .module import Module
-
+import torch
+from .module import Module, Conv2d, Upsampling
+from pathlib import Path
 
 class Sequential(Module):
 	def __init__(self, *args):
@@ -18,6 +19,31 @@ class Sequential(Module):
 		for transf in self.modules:
 			x = transf.forward(x)
 		return x
+
+
+	def state_dict(self):
+		state = list()
+		for layer in self.modules:
+			if isinstance(layer, Conv2d):
+				state.append({'weight': layer.weight, 'bias': layer.bias})
+			elif isinstance(layer, Upsampling):
+				state.append({'weight': layer.conv.weight, 'bias': layer.conv.bias})
+			else:
+				state.append({})
+		return state
+
+	def load_pretrained_model(self):
+        ## This loads the parameters saved in bestmodel.pth into the model
+		model_path = Path(__file__).parent / "bestmodel.pth"
+		state_dict = torch.load(model_path)
+
+		for i, layer in enumerate(self.modules):
+			if isinstance(layer, Conv2d):
+				layer.weight.data = state_dict[i]['weight']
+				layer.bias.data = state_dict[i]['bias']
+			elif isinstance(layer, Upsampling):
+				layer.conv.weight.data = state_dict[i]['weight']
+				layer.conv.bias.data = state_dict[i]['bias']
 
 
 	def backward(self,x):
