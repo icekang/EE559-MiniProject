@@ -10,8 +10,8 @@ class Sequential(Module):
 		for transf in args:
 			self.modules.append(transf)
 
-	def __call__(self,x, eval_mode=0):
-		return self.forward(x, eval_mode=eval_mode)
+	def __call__(self, x):
+		return self.forward(x)
 
 
 	def forward(self, x):
