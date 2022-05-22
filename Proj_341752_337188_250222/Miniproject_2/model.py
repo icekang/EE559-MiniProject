@@ -1,10 +1,38 @@
+from black import Mode
 import torch
 from torch import nn
 from torch.nn.functional import fold, unfold
 from .activations import Sigmoid, ReLU
 from .sequential import Sequential
+from .module import Module
+
 
 torch.set_default_dtype(torch.float64)
+
+class Model():
+    def __init__(self):
+        self.model = Sequential(
+            Conv2d(48, 3, 2, 2),
+            ReLU(),
+            Conv2d(96, 48, 2, 2),
+            ReLU(),
+            Upsampling(48, 96, 3, 1, 2),
+            ReLU(),
+            Upsampling(3, 48, 3, 1, 2),
+            Sigmoid()
+        )
+    
+    def forward(self, x):
+        return self.model(x)
+    
+    def predict(self, test_input):
+        test_input = test_input.float() / 255.0
+        output = self.forward(test_input)
+        output = output * 255.0
+        return torch.clip(output, 0.0, 255.0)
+
+    def backward(self, x):
+        return self.model.backward(x)
 
 class Conv2d():
     def __init__(self, out_channel, in_channel, kernel_size,stride = 1):
@@ -77,3 +105,39 @@ class Conv2d():
         self.bias -= output_gradient
 
         return input_gradient
+
+
+class NNUpsample(Module):
+    def __init__(self, scale_factor):
+        super(NNUpsample).__init__()
+        self.scale_factor = scale_factor
+
+    def forward(self, x):
+        r = x.repeat_interleave(self.scale_factor, dim=2).transpose(2, 3).repeat_interleave(2, dim=2).transpose(2, 3)
+        return r
+
+    def backward(self, r):
+        scale = self.scale_factor
+        res = []
+        for c in range(r.shape[1]): # aggregrate by channel
+            w = torch.zeros((1, 3, scale, scale))
+            w[:, c, :, :] = 1
+            unfolded = unfold(r.float(), kernel_size=(scale, scale), stride=scale)
+            out_unf = unfolded.transpose(1, 2).matmul(w.view(w.size(0), -1).t()).transpose(1, 2)
+            res.append(out_unf[:, 0, :].reshape((3, 3)))
+        res = torch.dstack(res)
+        return res
+
+
+class Upsampling(Module):
+    def __init__(self, out_channel, in_channel, kernel_size, stride=1, scale_factor=2):
+        super(Upsampling).__init__()
+        self.conv = Conv2d(out_channel, in_channel, kernel_size, stride)
+        self.nn = NNUpsample(scale_factor)
+
+    def forward(self, x):
+        return self.conv(self.nn(x))
+
+    def backward(self, gradwrtoutput):
+        x = self.nn.backward(gradwrtoutput)
+        return self.conv.backward(x)
