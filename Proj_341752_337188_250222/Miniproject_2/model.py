@@ -1,11 +1,15 @@
+from black import Mode
 import torch
+from torch import nn
+from torch.nn.functional import fold, unfold
 from .activations import Sigmoid, ReLU
 from .sequential import Sequential
-from .module import Module, Conv2d, Upsampling
+from .module import Module
+import floor
 
 torch.set_default_dtype(torch.float64)
 
-class Model(Module):
+class Model():
     def __init__(self):
         self.model = Sequential(
             Conv2d(48, 3, 2, 2),
@@ -17,22 +21,181 @@ class Model(Module):
             Upsampling(3, 48, 3, 1, 2),
             Sigmoid()
         )
-        
-        # Conv2d need to be initialized by passing dummy input
-        # self.forward(torch.zeros((1, 3, 512, 512)))
     
     def forward(self, x):
-        # x = x.float()
         return self.model(x)
     
     def predict(self, test_input):
-        test_input = test_input / 255.0
+        test_input = test_input.float() / 255.0
         output = self.forward(test_input)
         output = output * 255.0
         return torch.clip(output, 0.0, 255.0)
 
     def backward(self, x):
         return self.model.backward(x)
+
+import torch
+from torch import nn
+from torch.nn.functional import fold, unfold
+
+import torch
+from torch import nn
+from torch.nn.functional import fold, unfold
+
+class Conv2d():
+    def __init__(self, out_channel, in_channel, kernel_size,stride = 1):
+        # Batch size?
+        self.kernel_size = kernel_size
+        self.out_channel = out_channel
+        self.stride = stride
+        self.input_shape = None
+        self.in_channel = in_channel
+
     
-    def load_pretrained_model(self):
-        self.model.load_pretrained_model()
+    def set_initial(self, weight, bias):
+        self.weight = weight
+        self.bias = bias
+
+    def initialize(self, input):
+        input_height, input_width = input.size()[2:]
+        self.input_shape = (input_height, input_width)
+
+        print(input_height)
+        print(input_width)
+        print(self.kernel_size)
+        self.output_shape = (self.out_channel, self.out_size(input_height, self.kernel_size, self.stride), self.out_size(input_width, self.kernel_size, self.stride))
+        self.weight_shape = (self.out_channel, self.in_channel, self.kernel_size, self.kernel_size)
+        self.weight = torch.ones(self.weight_shape)
+        self.bias = torch.zeros(self.out_channel)
+        
+
+
+
+    
+    def out_size(self, s_in, ks, st):
+        return int((( s_in - (ks - 1) - 1 ) / st + 1) // 1)
+    
+    def forward(self, input):
+        if self.input_shape == None:
+            self.initialize(input)
+        input = input.float()
+
+        self.input = input
+        
+        unfolded = unfold(self.input, kernel_size= (self.kernel_size,self.kernel_size), stride = self.stride)
+        self.output = self.weight.view(self.out_channel, -1) @ unfolded + self.bias.view(1,-1,1)
+        self.output = self.output.view(input.size(0),self.out_channel,self.output_shape[1], self.output_shape[2])     
+        
+        return self.output
+    
+    def backward(self, output_gradient):
+        x, y = output_gradient.size()[-2:]
+        ks = self.weight_shape[-1] - 1
+        self.output_gradient = output_gradient
+        print("kernel_size", self.weight_shape)
+        # dL/dK = X_j * output_grad
+        self.weight_grads = torch.empty(self.weight_shape).zero_()
+        self.bias_grads = torch.empty(self.out_channel).zero_()
+        
+        print("self.output_shape",self.output_shape)
+        
+        print("output_mul", self.output_shape[1] * self.output_shape[2])
+        
+        zeros = torch.empty(self.input.size(0),self.input.size(1), self.input.size(2) + self.input.size(2) % self.output_shape[0], self.input.size(3)+ self.input.size(3) % self.input_shape[1]).zero_()
+        self.input2 = zeros[:,:,:self.input.size(2),:self.input.size(3)] = self.input
+        unfolded = unfold(self.input2.view(self.in_channel, 1, self.input_shape[0], self.input_shape[1]), kernel_size = self.output_shape[1:], dilation = 1, padding = 0, stride = self.stride)
+        print("unfolded.size()",unfolded.size())
+        #print("output_gradient.view(self.in_channel, -1).size()", output_gradient.view(self.in_channel, -1).size())
+        print("output_gradient.view(self.out_channel, -1).size()", output_gradient.view(self.out_channel, -1).size())
+
+        # [2, 4]
+        
+        wxb = output_gradient.view(self.out_channel,-1) @ unfolded
+        print("wxb.size()",wxb.size())
+
+        actual = wxb.view(self.out_channel, self.in_channel, -1,self.kernel_size, self.kernel_size) 
+        actual = wxb.sum(2)
+        print("actual",actual)
+        # in_channel = 10
+        # kernel_size = (3,3)
+        # stride = 2
+        # out_channel = 20
+        # in_size = (7,7)
+        
+        #  (9x90 and 9x20)
+        
+        print("actual.size()",actual.size())
+        
+        size_grad = self.output_gradient.size()[-2:]       
+        
+
+        # dL/db
+        print("self.weights.size()",self.weight.size())
+        # dL/dX_j = sum_i dE/dYi * Kij
+        
+        # self.kernel_flipped = self.weight.permute([1,0,2,3])
+        self.kernel_flipped = self.weight.flip([2,3])
+        
+        # unstride the output gradient
+        
+        # second index of zeros is output channels
+        
+        zeros = torch.empty(self.input.size(0),self.out_channel,(x-1)* (self.stride-1)+x, y + (y-1)* (self.stride -1)).zero_()
+        zeros[:,:,::self.stride,::self.stride] = output_gradient
+        
+        self.unstrided_gradient = zeros
+        print('self.unstrided_gradient.size()', self.unstrided_gradient.size())
+        
+        
+        unfolded = unfold(self.unstrided_gradient, kernel_size= (self.kernel_size,self.kernel_size), stride = 1, padding = (self.kernel_size - 1, self.kernel_size - 1))
+        print(unfolded)
+        print('unfolded.size()', unfolded.size())
+        
+        lhs = self.kernel_flipped.view(self.in_channel, self.kernel_size ** 2 * self.out_channel)
+        print('lhs.size()', lhs.size())
+        self.input_grad = lhs @ unfolded
+        
+        #self.input_grad = fold(self.input_grad)
+        
+        self.input_grad = self.input_grad.view(self.input.size(0),self.in_channel,-1,self.input_shape[0], self.input_shape[1])     
+        
+        self.input_grad = self.input_grad.sum(2)
+        print(self.input_grad.size())
+
+
+        return self.input_grad
+
+class NNUpsample(Module):
+    def __init__(self, scale_factor):
+        super(NNUpsample).__init__()
+        self.scale_factor = scale_factor
+
+    def forward(self, x):
+        r = x.repeat_interleave(self.scale_factor, dim=2).transpose(2, 3).repeat_interleave(2, dim=2).transpose(2, 3)
+        return r
+
+    def backward(self, r):
+        scale = self.scale_factor
+        res = []
+        for c in range(r.shape[1]): # aggregrate by channel
+            w = torch.zeros((1, 3, scale, scale))
+            w[:, c, :, :] = 1
+            unfolded = unfold(r.float(), kernel_size=(scale, scale), stride=scale)
+            out_unf = unfolded.transpose(1, 2).matmul(w.view(w.size(0), -1).t()).transpose(1, 2)
+            res.append(out_unf[:, 0, :].reshape((3, 3)))
+        res = torch.dstack(res)
+        return res
+
+
+class Upsampling(Module):
+    def __init__(self, out_channel, in_channel, kernel_size, stride=1, scale_factor=2):
+        super(Upsampling).__init__()
+        self.conv = Conv2d(out_channel, in_channel, kernel_size, stride)
+        self.nn = NNUpsample(scale_factor)
+
+    def forward(self, x):
+        return self.conv(self.nn(x))
+
+    def backward(self, gradwrtoutput):
+        x = self.nn.backward(gradwrtoutput)
+        return self.conv.backward(x)
