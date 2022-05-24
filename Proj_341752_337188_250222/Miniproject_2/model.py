@@ -42,6 +42,12 @@ import torch
 from torch import nn
 from torch.nn.functional import fold, unfold
 
+import torch
+from torch import nn
+from torch.nn.functional import fold, unfold
+import math
+
+
 class Conv2d():
     def __init__(self, out_channel, in_channel, kernel_size,stride = 1):
         # Batch size?
@@ -65,11 +71,13 @@ class Conv2d():
         print(self.kernel_size)
         self.output_shape = (self.out_channel, self.out_size(input_height, self.kernel_size, self.stride), self.out_size(input_width, self.kernel_size, self.stride))
         self.weight_shape = (self.out_channel, self.in_channel, self.kernel_size, self.kernel_size)
-        self.weight = torch.ones(self.weight_shape)
-        self.bias = torch.zeros(self.out_channel)
-        
-
-
+        self.weight = torch.randn(self.weight_shape)
+        self.bias = torch.randn(self.out_channel)
+    
+    def padding(self,input_size, ks, stride):
+        quotient = math.ceil(input_size / stride)
+        a =   (((input_size - stride+1) % ks)) % stride
+        return a
 
     
     def out_size(self, s_in, ks, st):
@@ -89,80 +97,71 @@ class Conv2d():
         return self.output
     
     def backward(self, output_gradient):
+        
+        learning_rate = 0.01
+        
+        ## define some vars that I might delete
         x, y = output_gradient.size()[-2:]
         ks = self.weight_shape[-1] - 1
         self.output_gradient = output_gradient
-        print("kernel_size", self.weight_shape)
-        # dL/dK = X_j * output_grad
+
+        
         self.weight_grads = torch.empty(self.weight_shape).zero_()
         self.bias_grads = torch.empty(self.out_channel).zero_()
         
+        
+        ### CALCULATE dL/dK
+        print("self.input.size()",self.input.size())
+        zeros = torch.empty(self.input.size(0),self.input.size(1), self.input.size(2) - self.padding(self.input.size(2), self.output_shape[1], self.stride), self.input.size(3) - self.padding(self.input.size(3), self.output_shape[2], self.stride)).zero_()
+        zeros[:,:,:self.input.size(2),:self.input.size(3)] = self.input[:,:,:self.input.size(2) - self.padding(self.input.size(2), self.output_shape[1], self.stride), : self.input.size(3) -self.padding(self.input.size(3), self.output_shape[2], self.stride)]
+        
+        print("self.padding(self.input.size(2), self.output_shape[1], self.stride)",self.padding(self.input.size(2), self.output_shape[1], self.stride))
         print("self.output_shape",self.output_shape)
+        print("zeros.size()",zeros.size())
+        self.input2 = zeros
         
-        print("output_mul", self.output_shape[1] * self.output_shape[2])
         
-        zeros = torch.empty(self.input.size(0),self.input.size(1), self.input.size(2) + self.input.size(2) % self.output_shape[0], self.input.size(3)+ self.input.size(3) % self.input_shape[1]).zero_()
-        self.input2 = zeros[:,:,:self.input.size(2),:self.input.size(3)] = self.input
-        unfolded = unfold(self.input2.view(self.in_channel, 1, self.input_shape[0], self.input_shape[1]), kernel_size = self.output_shape[1:], dilation = 1, padding = 0, stride = self.stride)
+        unfolded = unfold(self.input2.view(self.in_channel,1,  self.input2.size(2), self.input2.size(3)), kernel_size = self.output_shape[1:], dilation = self.stride, padding = 0, stride = 1)
         print("unfolded.size()",unfolded.size())
-        #print("output_gradient.view(self.in_channel, -1).size()", output_gradient.view(self.in_channel, -1).size())
-        print("output_gradient.view(self.out_channel, -1).size()", output_gradient.view(self.out_channel, -1).size())
-
-        # [2, 4]
-        
+        print("output_gradient.view(self.out_channel,-1)",output_gradient.view(self.out_channel,-1).size())
         wxb = output_gradient.view(self.out_channel,-1) @ unfolded
         print("wxb.size()",wxb.size())
 
-        actual = wxb.view(self.out_channel, self.in_channel, -1,self.kernel_size, self.kernel_size) 
-        actual = wxb.sum(2)
-        print("actual",actual)
-        # in_channel = 10
-        # kernel_size = (3,3)
-        # stride = 2
-        # out_channel = 20
-        # in_size = (7,7)
-        
-        #  (9x90 and 9x20)
-        
-        print("actual.size()",actual.size())
-        
+        actual = wxb.view(self.out_channel, self.in_channel,self.kernel_size, self.kernel_size) 
+        self.weight_grads += actual
+                
         size_grad = self.output_gradient.size()[-2:]       
         
-
-        # dL/db
-        print("self.weights.size()",self.weight.size())
-        # dL/dX_j = sum_i dE/dYi * Kij
+        ### CALCULATE dL/dX
         
-        # self.kernel_flipped = self.weight.permute([1,0,2,3])
+        # we will flip the kernel to do the full convolution
         self.kernel_flipped = self.weight.flip([2,3])
         
-        # unstride the output gradient
-        
-        # second index of zeros is output channels
-        
-        zeros = torch.empty(self.input.size(0),self.out_channel,(x-1)* (self.stride-1)+x, y + (y-1)* (self.stride -1)).zero_()
+        # unstride the output gradient        
+        zeros = torch.empty(self.input.size(0),self.out_channel,(x-1)* (self.stride-1)+x + self.padding(self.input.size(2), self.output_shape[1], self.stride) , y + (y-1)* (self.stride -1) + self.padding(self.input.size(2), self.output_shape[1], self.stride)).zero_()
         zeros[:,:,::self.stride,::self.stride] = output_gradient
         
-        self.unstrided_gradient = zeros
-        print('self.unstrided_gradient.size()', self.unstrided_gradient.size())
+        self.unstrided_gradient = zeros        
+        print("self.unstrided_gradient.size()",self.unstrided_gradient.size())
         
         
-        unfolded = unfold(self.unstrided_gradient, kernel_size= (self.kernel_size,self.kernel_size), stride = 1, padding = (self.kernel_size - 1, self.kernel_size - 1))
-        print(unfolded)
-        print('unfolded.size()', unfolded.size())
+        unfolded = unfold(self.unstrided_gradient, kernel_size= self.kernel_size, stride = 1, padding = (self.kernel_size - 1, self.kernel_size - 1))
         
+        print("unfolded.size()",unfolded.size())
         lhs = self.kernel_flipped.view(self.in_channel, self.kernel_size ** 2 * self.out_channel)
-        print('lhs.size()', lhs.size())
+        print("lhs.size()",lhs.size() )
         self.input_grad = lhs @ unfolded
-        
-        #self.input_grad = fold(self.input_grad)
-        
-        self.input_grad = self.input_grad.view(self.input.size(0),self.in_channel,-1,self.input_shape[0], self.input_shape[1])     
-        
-        self.input_grad = self.input_grad.sum(2)
-        print(self.input_grad.size())
+                
+        self.input_grad = self.input_grad.view(self.input.size(0),self.in_channel,self.input_shape[0], self.input_shape[1])     
 
+        # CALCULATE dL/dB
+        
+        self.bias_grads += self.output_gradient.mean((0,2,3))
 
+        self.weight -= learning_rate * self.weight_grads
+        self.bias -= learning_rate * self.bias_grads
+        print("output_gradient.shape", self.output_gradient.shape)
+        print("self.out_channel", self.out_channel)
         return self.input_grad
 
 class NNUpsample(Module):
