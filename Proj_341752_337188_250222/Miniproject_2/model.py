@@ -1,11 +1,9 @@
-from black import Mode
 import torch
 from torch import nn
 from torch.nn.functional import fold, unfold
 from .activations import Sigmoid, ReLU
 from .sequential import Sequential
 from .module import Module
-import floor
 
 torch.set_default_dtype(torch.float64)
 
