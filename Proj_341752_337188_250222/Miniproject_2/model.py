@@ -34,17 +34,7 @@ class Model():
     def backward(self, x):
         return self.model.backward(x)
 
-import torch
-from torch import nn
-from torch.nn.functional import fold, unfold
 
-import torch
-from torch import nn
-from torch.nn.functional import fold, unfold
-
-import torch
-from torch import nn
-from torch.nn.functional import fold, unfold
 import math
 
 
@@ -90,9 +80,9 @@ class Conv2d():
 
         self.input = input
         
-        unfolded = unfold(self.input, kernel_size= (self.kernel_size,self.kernel_size), stride = self.stride)
-        self.output = self.weight.view(self.out_channel, -1) @ unfolded + self.bias.view(1,-1,1)
-        self.output = self.output.view(input.size(0),self.out_channel,self.output_shape[1], self.output_shape[2])     
+        unfolded = unfold(self.input, kernel_size= (self.kernel_size,self.kernel_size), stride = self.stride).float() 
+        self.output = self.weight.view(self.out_channel, -1).float()  @ unfolded.float()  + self.bias.view(1,-1,1).float() 
+        self.output = self.output.view(input.size(0),self.out_channel,self.output_shape[1], self.output_shape[2]).float() 
         
         return self.output
     
