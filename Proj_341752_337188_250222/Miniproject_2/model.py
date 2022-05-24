@@ -20,6 +20,11 @@ class Model():
             Sigmoid()
         )
     
+
+    def load_pretrained_model(self):
+        self.model.load_pretrained_model()
+
+
     def forward(self, x):
         return self.model(x)
     
@@ -172,7 +177,7 @@ class Upsampling(Module):
         self.nn = NNUpsample(scale_factor)
 
     def forward(self, x):
-        return self.conv(self.nn(x))
+        return self.conv.forward(self.nn.forward(x))
 
     def backward(self, gradwrtoutput):
         x = self.nn.backward(gradwrtoutput)
