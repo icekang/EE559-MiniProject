@@ -71,8 +71,8 @@ class Conv2d():
         print(self.kernel_size)
         self.output_shape = (self.out_channel, self.out_size(input_height, self.kernel_size, self.stride), self.out_size(input_width, self.kernel_size, self.stride))
         self.weight_shape = (self.out_channel, self.in_channel, self.kernel_size, self.kernel_size)
-        self.weight = torch.randn(self.weight_shape)
-        self.bias = torch.randn(self.out_channel)
+        self.weight = torch.empty(self.weight_shape).normal_()
+        self.bias = torch.empty(self.out_channel).normal_()
     
     def padding(self,input_size, ks, stride):
         quotient = math.ceil(input_size / stride)
@@ -111,21 +111,16 @@ class Conv2d():
         
         
         ### CALCULATE dL/dK
-        print("self.input.size()",self.input.size())
         zeros = torch.empty(self.input.size(0),self.input.size(1), self.input.size(2) - self.padding(self.input.size(2), self.output_shape[1], self.stride), self.input.size(3) - self.padding(self.input.size(3), self.output_shape[2], self.stride)).zero_()
         zeros[:,:,:self.input.size(2),:self.input.size(3)] = self.input[:,:,:self.input.size(2) - self.padding(self.input.size(2), self.output_shape[1], self.stride), : self.input.size(3) -self.padding(self.input.size(3), self.output_shape[2], self.stride)]
         
-        print("self.padding(self.input.size(2), self.output_shape[1], self.stride)",self.padding(self.input.size(2), self.output_shape[1], self.stride))
-        print("self.output_shape",self.output_shape)
-        print("zeros.size()",zeros.size())
+ 
         self.input2 = zeros
         
         
         unfolded = unfold(self.input2.view(self.in_channel,1,  self.input2.size(2), self.input2.size(3)), kernel_size = self.output_shape[1:], dilation = self.stride, padding = 0, stride = 1)
-        print("unfolded.size()",unfolded.size())
-        print("output_gradient.view(self.out_channel,-1)",output_gradient.view(self.out_channel,-1).size())
+
         wxb = output_gradient.view(self.out_channel,-1) @ unfolded
-        print("wxb.size()",wxb.size())
 
         actual = wxb.view(self.out_channel, self.in_channel,self.kernel_size, self.kernel_size) 
         self.weight_grads += actual
@@ -142,14 +137,11 @@ class Conv2d():
         zeros[:,:,::self.stride,::self.stride] = output_gradient
         
         self.unstrided_gradient = zeros        
-        print("self.unstrided_gradient.size()",self.unstrided_gradient.size())
         
         
         unfolded = unfold(self.unstrided_gradient, kernel_size= self.kernel_size, stride = 1, padding = (self.kernel_size - 1, self.kernel_size - 1))
         
-        print("unfolded.size()",unfolded.size())
         lhs = self.kernel_flipped.view(self.in_channel, self.kernel_size ** 2 * self.out_channel)
-        print("lhs.size()",lhs.size() )
         self.input_grad = lhs @ unfolded
                 
         self.input_grad = self.input_grad.view(self.input.size(0),self.in_channel,self.input_shape[0], self.input_shape[1])     
@@ -160,8 +152,7 @@ class Conv2d():
 
         self.weight -= learning_rate * self.weight_grads
         self.bias -= learning_rate * self.bias_grads
-        print("output_gradient.shape", self.output_gradient.shape)
-        print("self.out_channel", self.out_channel)
+
         return self.input_grad
 
 class NNUpsample(Module):

@@ -183,8 +183,9 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('-p', '--project-path', help='Path to the project folder', required=True)
     parser.add_argument('-d', '--data-path', help='Path to the data folder', required=True)
-    args = parser.parse_args()
     
+    args = parser.parse_args()
+    print(args)
     project_path = Path(args.project_path)
     data_path = Path(args.data_path)
 
