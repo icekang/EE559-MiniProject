@@ -23,6 +23,9 @@ class Conv2d():
         self.stride = stride
         self.input_shape = None
         self.in_channel = in_channel
+        self.weight_shape = (self.out_channel, self.in_channel, self.kernel_size, self.kernel_size)
+        self.weight = torch.empty(self.weight_shape).normal_().float()
+        self.bias = torch.empty(self.out_channel).normal_().float()
 
     
     def set_initial(self, weight, bias):
@@ -33,9 +36,7 @@ class Conv2d():
         input_height, input_width = input.size()[2:]
         self.input_shape = (input_height, input_width)
         self.output_shape = (self.out_channel, self.out_size(input_height, self.kernel_size, self.stride), self.out_size(input_width, self.kernel_size, self.stride))
-        self.weight_shape = (self.out_channel, self.in_channel, self.kernel_size, self.kernel_size)
-        self.weight = torch.empty(self.weight_shape).normal_().float()
-        self.bias = torch.empty(self.out_channel).normal_().float()
+
     
     def padding(self,input_size, ks, stride):
         quotient = math.ceil(input_size / stride)

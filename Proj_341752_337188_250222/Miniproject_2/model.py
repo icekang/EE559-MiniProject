@@ -24,7 +24,7 @@ class Model():
         return self.model(x)
     
     def predict(self, test_input):
-        test_input = test_input.float() / 255.0
+        test_input = test_input / 255.0
         output = self.forward(test_input)
         output = output * 255.0
         return torch.clip(output, 0.0, 255.0)
