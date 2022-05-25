@@ -16,33 +16,33 @@ class Module:
 
 
 class Conv2d():
-    def __init__(self, out_channel, in_channel, kernel_size,stride = 1):
+    def __init__(self, out_channel, in_channel, kernel_size,stride = 1, padding = 0):
         # Batch size?
         self.kernel_size = kernel_size
         self.out_channel = out_channel
         self.stride = stride
         self.input_shape = None
         self.in_channel = in_channel
-        self.weight_shape = (self.out_channel, self.in_channel, self.kernel_size, self.kernel_size)
-        self.weight = torch.empty(self.weight_shape).normal_().float()
-        self.bias = torch.empty(self.out_channel).normal_().float()
-
-    
-    def set_initial(self, weight, bias):
-        self.weight = weight
-        self.bias = bias
-
+        self.padding_ = padding
+        
     def initialize(self, input):
         input_height, input_width = input.size()[2:]
         self.input_shape = (input_height, input_width)
+        self.batch_size = input.size(0)
         self.output_shape = (self.out_channel, self.out_size(input_height, self.kernel_size, self.stride), self.out_size(input_width, self.kernel_size, self.stride))
+        self.weight_shape = (self.out_channel, self.in_channel, self.kernel_size, self.kernel_size)
+        self.weight = torch.empty(self.weight_shape,device=device).normal_()
+        self.bias = torch.empty(self.out_channel,device =device).normal_()
 
     
-    def padding(self,input_size, ks, stride):
-        quotient = math.ceil(input_size / stride)
-        a =   (((input_size - stride+1) % ks)) % stride
-        return a
-
+    def padding(self, input_size, ks, stride):
+        j = None
+        for i in range(10):
+            k = (input_size - ks + i) / stride
+            if k.is_integer() == True:
+                j = i
+                break
+        return j
     
     def out_size(self, s_in, ks, st):
         return int((( s_in - (ks - 1) - 1 ) / st + 1) // 1)
@@ -51,17 +51,19 @@ class Conv2d():
         if self.input_shape == None:
             self.initialize(input)
         input = input.float()
+        #self.padding_ = padding(self.input_shape[0], self.kernel_size, self.stride)
 
         self.input = input
-        
-        unfolded = unfold(self.input, kernel_size= (self.kernel_size,self.kernel_size), stride = self.stride).float()
-        self.output = self.weight.view(self.out_channel, -1).float() @ unfolded.float() + self.bias.view(1,-1,1).float()
-        self.output = self.output.view(input.size(0),self.out_channel,self.output_shape[1], self.output_shape[2]).float()  
+        print("self.output_shape",self.output_shape)
+        unfolded = unfold(self.input, kernel_size= (self.kernel_size,self.kernel_size), stride = self.stride, padding = self.padding_).float() 
+        self.output = self.weight.view(self.out_channel, -1).float()  @ unfolded.float()  + self.bias.view(1,-1,1).float() 
+
+        self.output = self.output.view(input.size(0),self.out_channel,self.output_shape[1] + 2*self.padding_, self.output_shape[2] + 2*self.padding_).float() 
         
         return self.output
     
     def backward(self, output_gradient):
-        
+        print("output_gradient.size()",output_gradient.size())
         learning_rate = 0.01
         
         ## define some vars that I might delete
@@ -70,49 +72,71 @@ class Conv2d():
         self.output_gradient = output_gradient
 
         
-        self.weight_grads = torch.empty(self.weight_shape).zero_()
-        self.bias_grads = torch.empty(self.out_channel).zero_()
+        self.weight_grads = torch.empty(self.weight_shape,device=device).zero_()
+        self.bias_grads = torch.empty(self.out_channel,device=device).zero_()
         
         
         ### CALCULATE dL/dK
-        zeros = torch.empty(self.input.size(0),self.input.size(1), self.input.size(2) - self.padding(self.input.size(2), self.output_shape[1], self.stride), self.input.size(3) - self.padding(self.input.size(3), self.output_shape[2], self.stride)).zero_()
-        zeros[:,:,:self.input.size(2),:self.input.size(3)] = self.input[:,:,:self.input.size(2) - self.padding(self.input.size(2), self.output_shape[1], self.stride), : self.input.size(3) -self.padding(self.input.size(3), self.output_shape[2], self.stride)]
+        st_pad = self.padding(self.input.size(2), self.output_shape[1], self.stride) 
+        print(self.padding(self.input.size(2), self.output_shape[1], self.stride))
+        print(st_pad)
+        st_pad2 = self.padding(self.input.size(3), self.output_shape[2], self.stride)
+        
+        zeros = torch.empty(self.input.size(0),self.input.size(1), self.input.size(2) + st_pad, self.input.size(3) + st_pad2, device = device).zero_().float()
+        print("input.size()",self.input.size())
+        print("zeros.size()",zeros.size())
+        
+        zeros[:,:,:self.input.size(2),:self.input.size(3)] = self.input[:,:,:self.input.size(2), : self.input.size(3)]
         
  
         self.input2 = zeros
         
+        unfolded = unfold(self.input2.view(self.in_channel,self.input.size(0),  self.input2.size(2), self.input2.size(3)), kernel_size = self.output_shape[1:], dilation = self.stride, padding = 0, stride =1)
+
+        print("output_gradient.view(self.out_channel,-1).size()",output_gradient.view(self.out_channel,-1).size())
+        print("unfolded.size()",unfolded.size())
+
+        wxb = output_gradient.view(self.out_channel,-1) @ unfolded#.view(self.in_channel,self.out_channel, -1)
+        print("wxb.size()", wxb.size())
         
-        unfolded = unfold(self.input2.view(self.in_channel,1,  self.input2.size(2), self.input2.size(3)), kernel_size = self.output_shape[1:], dilation = self.stride, padding = 0, stride = 1)
-
-        wxb = output_gradient.view(self.out_channel,-1) @ unfolded
-
         actual = wxb.view(self.out_channel, self.in_channel,self.kernel_size, self.kernel_size).float()
         self.weight_grads += actual
                 
         size_grad = self.output_gradient.size()[-2:]       
-        
+        """
         ### CALCULATE dL/dX
+        (bs, ic, h, w) = self.input.shape
+        (oc,ic,s0,s1) = self.weight.shape
+        (bs,oc,oh,ow) = self.output_gradient.shape
+        blocks = (self.output_gradient.view(bs,oc,oh*ow).transpose(1,2).reshape(-1,oc).float().mm(self.weight.view(oc,-1).float())).reshape(bs,oh*ow,-1).transpose(1,2)
         
+        return fold(blocks,(h,w), (s0,s1),stride= self.stride, padding = self.padding_).reshape(self.input.shape)
+    
+        """
         # we will flip the kernel to do the full convolution
         self.kernel_flipped = self.weight.flip([2,3])
         
-        # unstride the output gradient        
-        zeros = torch.empty(self.input.size(0),self.out_channel,(x-1)* (self.stride-1)+x + self.padding(self.input.size(2), self.output_shape[1], self.stride) , y + (y-1)* (self.stride -1) + self.padding(self.input.size(2), self.output_shape[1], self.stride)).zero_()
+        # unstride the output gradient    
+        
+
+        zeros = torch.empty(self.input.size(0),self.out_channel,(x-1)* (self.stride-1)+x + st_pad , y + (y-1)* (self.stride -1) + st_pad2).zero_()
         zeros[:,:,::self.stride,::self.stride] = output_gradient
         
-        self.unstrided_gradient = zeros.float()
+        self.unstrided_gradient = zeros        
         
         
         unfolded = unfold(self.unstrided_gradient, kernel_size= self.kernel_size, stride = 1, padding = (self.kernel_size - 1, self.kernel_size - 1))
         
         lhs = self.kernel_flipped.view(self.in_channel, self.kernel_size ** 2 * self.out_channel)
+        #lhs = self.kernel_flipped.view(self.in_channel, -1)
+
         self.input_grad = lhs @ unfolded
                 
-        self.input_grad = self.input_grad.view(self.input.size(0),self.in_channel,self.input_shape[0], self.input_shape[1]).float() 
+        self.input_grad = self.input_grad.view(self.input.size(0),self.in_channel,self.input_shape[0], self.input_shape[1])     
 
         # CALCULATE dL/dB
         
-        self.bias_grads += self.output_gradient.mean((0,2,3)).float()
+        self.bias_grads += self.output_gradient.mean((0,2,3))
 
         self.weight -= learning_rate * self.weight_grads
         self.bias -= learning_rate * self.bias_grads
