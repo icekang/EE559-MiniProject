@@ -14,7 +14,87 @@ class Module:
 		return []
 
 
+import math
+class Upsampling(Module):
+    def __init__(self, out_channel, in_channel, kernel_size, stride=1, scale_factor=2):
+        super(Upsampling).__init__()
+        self.nn = NNUpsample(scale_factor)
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.conv = Conv2d(out_channel, in_channel, kernel_size, stride)
 
+    def forward(self, x):
+        pad = self.padding2(x.size(2), self.kernel_size, self.stride)
+        self.padding = Padding(pad)
+        x = self.nn.forward(x)
+        #x = self.padding.forward(x)
+        return self.conv.forward(x)
+
+    def backward(self, gradwrtoutput):
+        x = self.conv.backward(gradwrtoutput)
+        #x = self.padding.backward(x)
+        return self.nn.backward(x)
+    def padding2(self, input_size, ks, stride):
+        j = None
+        for i in range(10):
+            k = (input_size - ks + i) / stride
+            if k.is_integer() == True:
+                j = i
+                break
+        return j
+    
+class Padding(Module):
+    def __init__(self, padding):
+        super(Padding).__init__()
+        self.padding = padding
+
+    def forward(self, x):
+        padded = torch.zeros((x.size(0), x.size(1), x.size(2) + 2 * self.padding, x.size(3) + 2 * self.padding))
+        padded[:, :, self.padding:x.size(2) + self.padding, self.padding:x.size(3) + self.padding] = x
+        return padded
+
+    def backward(self, x):    
+        y = x[:, :, self.padding:-self.padding, self.padding:-self.padding]
+        return y
+    
+
+    
+
+class NNUpsample(Module):
+    def __init__(self, scale_factor):
+        super(NNUpsample).__init__()
+        self.scale_factor = scale_factor
+
+    def forward(self, x):
+        self.input_size = x.size()
+        self.batch_size = x.size(0)
+        self.channels = x.size(1)
+        r = x.repeat_interleave(self.scale_factor, dim=2).transpose(2, 3).repeat_interleave(self.scale_factor, dim=2).transpose(2, 3)
+        return r
+
+    def backward(self, r):
+        
+        scale = self.scale_factor
+        res = []
+        for c in range(r.shape[1]): # aggregrate by channel
+            w = torch.zeros((self.batch_size, r.shape[1], scale, scale), device = device).float()
+            w[:, c, :, :] = 1
+            unfolded = unfold(r.float(), kernel_size=(scale, scale), stride=scale).float()
+
+            lhs = w.view(self.batch_size, r.shape[1],-1)
+            unfolded = unfolded.view(self.batch_size, scale**2,-1)
+            #print("unfolded.shape",unfolded.shape)
+
+            #print("lhs.shape", lhs.shape)
+            out_unf = lhs @ unfolded
+            
+            #out_unf = unfolded.transpose(1, 2).matmul(w.view(r.shape[1], -1).t()).transpose(1, 2)
+            #print("out_unf[:, 0, :].reshape((self.batch_size,r.shape[1],self.input_size[2], self.input_size[3]))",out_unf[:, 0, :].reshape((self.batch_size,r.shape[1],self.input_size[2], self.input_size[3])).sum(1, keepdim=True).shape)
+            res.append(out_unf[:, c, :].reshape((self.batch_size,r.shape[1],self.input_size[2], self.input_size[3])).sum(1, keepdim = True))
+        res = torch.stack(res, dim = 1).sum(2)
+        return res
+
+    
 class Conv2d():
     def __init__(self, out_channel, in_channel, kernel_size,stride = 1, padding = 0):
         # Batch size?
@@ -91,7 +171,7 @@ class Conv2d():
  
         self.input2 = zeros
         
-        unfolded = unfold(self.input2.view(self.in_channel,self.input.size(0),  self.input2.size(2), self.input2.size(3)), kernel_size = self.output_shape[1:], dilation = self.stride, padding = 0, stride =1)
+        unfolded = unfold(self.input2.view(self.in_channel,self.input.size(0),  self.input2.size(2), self.input2.size(3)), kernel_size = self.output_shape[1:], dilation = self.stride, padding = 0, stride =self.stride)
 
         print("output_gradient.view(self.out_channel,-1).size()",output_gradient.view(self.out_channel,-1).size())
         print("unfolded.size()",unfolded.size())
@@ -142,57 +222,5 @@ class Conv2d():
         self.bias -= learning_rate * self.bias_grads
 
         return self.input_grad
-
-
-class NNUpsample(Module):
-    def __init__(self, scale_factor):
-        super(NNUpsample).__init__()
-        self.scale_factor = scale_factor
-
-    def forward(self, x):
-        r = x.repeat_interleave(self.scale_factor, dim=2).transpose(2, 3).repeat_interleave(2, dim=2).transpose(2, 3)
-        return r
-
-    def backward(self, r):
-        scale = self.scale_factor
-        res = []
-        for c in range(r.shape[1]): # aggregrate by channel
-            w = torch.zeros((1, 3, scale, scale))
-            w[:, c, :, :] = 1
-            unfolded = unfold(r.float(), kernel_size=(scale, scale), stride=scale)
-            out_unf = unfolded.transpose(1, 2).matmul(w.view(w.size(0), -1).t()).transpose(1, 2)
-            res.append(out_unf[:, 0, :].reshape((3, 3)))
-        res = torch.dstack(res)
-        return res
-
-
-class Upsampling(Module):
-    def __init__(self, out_channel, in_channel, kernel_size, stride=1, scale_factor=2):
-        super(Upsampling).__init__()
-        self.nn = NNUpsample(scale_factor)
-        self.padding = Padding((kernel_size - 1) // 2)
-        self.conv = Conv2d(out_channel, in_channel, kernel_size, stride)
-
-    def forward(self, x):
-        x = self.nn.forward(x)
-        x = self.padding.forward(x)
-        return self.conv.forward(x)
-
-    def backward(self, gradwrtoutput):
-        x = self.nn.backward(gradwrtoutput)
-        x = self.padding.backward(x)
-        return self.conv.backward(x)
     
 
-class Padding(Module):
-    def __init__(self, padding):
-        super(Padding).__init__()
-        self.padding = padding
-
-    def forward(self, x):
-        padded = torch.zeros((x.size(0), x.size(1), x.size(2) + 2 * self.padding, x.size(3) + 2 * self.padding))
-        padded[:, :, self.padding:x.size(2) + self.padding, self.padding:x.size(3) + self.padding] = x
-        return padded
-
-    def backward(self, x):
-        return x[:, :, self.padding:-self.padding, self.padding:-self.padding]
