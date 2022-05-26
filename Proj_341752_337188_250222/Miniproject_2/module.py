@@ -25,14 +25,20 @@ class Upsampling(Module):
 
     def forward(self, x):
         pad = self.padding2(x.size(2), self.kernel_size, self.stride)
-        self.padding = Padding(pad)
+        
+        self.padding = Padding(1)
         x = self.nn.forward(x)
-        #x = self.padding.forward(x)
-        return self.conv.forward(x)
+        #print("upsampling after nn size", x.size())
+        #print("pad", pad)
+        x = self.padding.forward(x)
+        #print("after padding size", x.size())
+        y = self.conv.forward(x)
+        #print("upsampling after conv size", y.size())
+        return y
 
     def backward(self, gradwrtoutput):
         x = self.conv.backward(gradwrtoutput)
-        #x = self.padding.backward(x)
+        x = self.padding.backward(x)
         return self.nn.backward(x)
     def padding2(self, input_size, ks, stride):
         j = None
@@ -42,6 +48,7 @@ class Upsampling(Module):
                 j = i
                 break
         return j
+    
     
 class Padding(Module):
     def __init__(self, padding):
@@ -60,6 +67,7 @@ class Padding(Module):
 
     
 
+    
 class NNUpsample(Module):
     def __init__(self, scale_factor):
         super(NNUpsample).__init__()
@@ -96,6 +104,7 @@ class NNUpsample(Module):
 
     
 class Conv2d():
+    
     def __init__(self, out_channel, in_channel, kernel_size,stride = 1, padding = 0):
         # Batch size?
         self.kernel_size = kernel_size
@@ -103,16 +112,17 @@ class Conv2d():
         self.stride = stride
         self.input_shape = None
         self.in_channel = in_channel
+        self.weight_shape = (self.out_channel, self.in_channel, self.kernel_size, self.kernel_size)
         self.padding_ = padding
+        self.weight = torch.empty(self.weight_shape,device=device).normal_()
+        self.bias = torch.empty(self.out_channel,device =device).normal_()
         
     def initialize(self, input):
         input_height, input_width = input.size()[2:]
         self.input_shape = (input_height, input_width)
         self.batch_size = input.size(0)
         self.output_shape = (self.out_channel, self.out_size(input_height, self.kernel_size, self.stride), self.out_size(input_width, self.kernel_size, self.stride))
-        self.weight_shape = (self.out_channel, self.in_channel, self.kernel_size, self.kernel_size)
-        self.weight = torch.empty(self.weight_shape,device=device).normal_()
-        self.bias = torch.empty(self.out_channel,device =device).normal_()
+
 
     
     def padding(self, input_size, ks, stride):
@@ -131,14 +141,21 @@ class Conv2d():
         if self.input_shape == None:
             self.initialize(input)
         input = input.float()
-        #self.padding_ = padding(self.input_shape[0], self.kernel_size, self.stride)
-
         self.input = input
+        st_pad = self.padding(self.input.size(2), self.kernel_size, self.stride) 
+
+        #self.padding_ = padding(self.input_shape[0], self.kernel_size, self.stride)
+        zeros = torch.empty(self.input.size(0),self.input.size(1), self.input.size(2) + st_pad, self.input.size(3) + st_pad, device = device).zero_().float()
+        zeros[:,:,:self.input.size(2),:self.input.size(3)] = self.input[:,:,:self.input.size(2), : self.input.size(3)]
+        input = zeros
+        
         print("self.output_shape",self.output_shape)
-        unfolded = unfold(self.input, kernel_size= (self.kernel_size,self.kernel_size), stride = self.stride, padding = self.padding_).float() 
+        #st_pad = 1
+        print("st_pad",st_pad)
+        unfolded = unfold(self.input, kernel_size= (self.kernel_size,self.kernel_size), stride = self.stride, padding = 0).float() 
         self.output = self.weight.view(self.out_channel, -1).float()  @ unfolded.float()  + self.bias.view(1,-1,1).float() 
 
-        self.output = self.output.view(input.size(0),self.out_channel,self.output_shape[1] + 2*self.padding_, self.output_shape[2] + 2*self.padding_).float() 
+        self.output = self.output.view(input.size(0),self.out_channel,self.output_shape[1], self.output_shape[2] ).float() 
         
         return self.output
     
@@ -150,7 +167,7 @@ class Conv2d():
         x, y = output_gradient.size()[-2:]
         ks = self.weight_shape[-1] - 1
         self.output_gradient = output_gradient
-
+        print("output_gradient.size()",output_gradient.size())
         
         self.weight_grads = torch.empty(self.weight_shape,device=device).zero_()
         self.bias_grads = torch.empty(self.out_channel,device=device).zero_()
@@ -158,57 +175,36 @@ class Conv2d():
         
         ### CALCULATE dL/dK
         st_pad = self.padding(self.input.size(2), self.output_shape[1], self.stride) 
-        print(self.padding(self.input.size(2), self.output_shape[1], self.stride))
-        print(st_pad)
         st_pad2 = self.padding(self.input.size(3), self.output_shape[2], self.stride)
         
         zeros = torch.empty(self.input.size(0),self.input.size(1), self.input.size(2) + st_pad, self.input.size(3) + st_pad2, device = device).zero_().float()
-        print("input.size()",self.input.size())
-        print("zeros.size()",zeros.size())
-        
         zeros[:,:,:self.input.size(2),:self.input.size(3)] = self.input[:,:,:self.input.size(2), : self.input.size(3)]
-        
- 
         self.input2 = zeros
-        
-        unfolded = unfold(self.input2.view(self.in_channel,self.input.size(0),  self.input2.size(2), self.input2.size(3)), kernel_size = self.output_shape[1:], dilation = self.stride, padding = 0, stride =self.stride)
-
-        print("output_gradient.view(self.out_channel,-1).size()",output_gradient.view(self.out_channel,-1).size())
+        unfolded = unfold(self.input2.view(self.in_channel,self.input.size(0),  self.input2.size(2), self.input2.size(3)), kernel_size = self.output_shape[1:], dilation = self.stride, padding = st_pad, stride =1)
         print("unfolded.size()",unfolded.size())
-
+        print("output_gradient.view(self.out_channel,-1).size()",output_gradient.view(self.out_channel, self.batch_size,-1).size())
+        
         wxb = output_gradient.view(self.out_channel,-1) @ unfolded#.view(self.in_channel,self.out_channel, -1)
-        print("wxb.size()", wxb.size())
+        
+        print("wxb.size()",wxb.size())
+        #print("wxb.size()", wxb.size())
         
         actual = wxb.view(self.out_channel, self.in_channel,self.kernel_size, self.kernel_size).float()
+
         self.weight_grads += actual
                 
         size_grad = self.output_gradient.size()[-2:]       
-        """
-        ### CALCULATE dL/dX
-        (bs, ic, h, w) = self.input.shape
-        (oc,ic,s0,s1) = self.weight.shape
-        (bs,oc,oh,ow) = self.output_gradient.shape
-        blocks = (self.output_gradient.view(bs,oc,oh*ow).transpose(1,2).reshape(-1,oc).float().mm(self.weight.view(oc,-1).float())).reshape(bs,oh*ow,-1).transpose(1,2)
         
-        return fold(blocks,(h,w), (s0,s1),stride= self.stride, padding = self.padding_).reshape(self.input.shape)
-    
-        """
         # we will flip the kernel to do the full convolution
         self.kernel_flipped = self.weight.flip([2,3])
         
         # unstride the output gradient    
-        
-
         zeros = torch.empty(self.input.size(0),self.out_channel,(x-1)* (self.stride-1)+x + st_pad , y + (y-1)* (self.stride -1) + st_pad2).zero_()
         zeros[:,:,::self.stride,::self.stride] = output_gradient
-        
         self.unstrided_gradient = zeros        
-        
-        
         unfolded = unfold(self.unstrided_gradient, kernel_size= self.kernel_size, stride = 1, padding = (self.kernel_size - 1, self.kernel_size - 1))
         
         lhs = self.kernel_flipped.view(self.in_channel, self.kernel_size ** 2 * self.out_channel)
-        #lhs = self.kernel_flipped.view(self.in_channel, -1)
 
         self.input_grad = lhs @ unfolded
                 
@@ -223,4 +219,6 @@ class Conv2d():
 
         return self.input_grad
     
+
+
 

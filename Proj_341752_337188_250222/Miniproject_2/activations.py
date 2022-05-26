@@ -12,6 +12,7 @@ class Sigmoid(Module):
 		return self.forward(x)
 	
 	def forward(self,x):
+		print("x.shape",x.shape)
 		return 1 / ( 1 + torch.exp(-x) )
 	
 	def _grad(self, x):
@@ -19,6 +20,7 @@ class Sigmoid(Module):
 	
 	def backward(self, gradwrtoutput):
 		return self._grad(gradwrtoutput)
+    
 
 
 class ReLU(Module):
