@@ -25,7 +25,7 @@ class Model(Module):
     def load_pretrained_model(self):
         self.model.load_pretrained_model()
 
-    def train( self, train_input, train_target, num_epochs ) -> None :
+    def train( self, train_input, train_target, num_epochs ):
         losses = []
         mini_batch_size = 100
         lr = 0.0001
