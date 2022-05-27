@@ -10,33 +10,33 @@ class Model(nn.Module):
         ## instantiate model + optimizer + loss function + any other stuff you need
         super().__init__()
 
-        self.enc_conv0 = nn.Conv2d(in_channels=3,  out_channels=48, kernel_size=(3, 3), padding='same')
-        self.enc_conv1 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), padding='same')
-        self.enc_conv2 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), padding='same')
-        self.enc_conv3 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), padding='same')
-        self.enc_conv4 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), padding='same')
-        self.enc_conv5 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), padding='same')
-        self.enc_conv6 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), padding='same')
+        self.enc_conv0 = nn.Conv2d(in_channels=3,  out_channels=48, kernel_size=(3, 3), padding='same', dtype=torch.float)
+        self.enc_conv1 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), padding='same', dtype=torch.float)
+        self.enc_conv2 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), padding='same', dtype=torch.float)
+        self.enc_conv3 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), padding='same', dtype=torch.float)
+        self.enc_conv4 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), padding='same', dtype=torch.float)
+        self.enc_conv5 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), padding='same', dtype=torch.float)
+        self.enc_conv6 = nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), padding='same', dtype=torch.float)
         #concat5
-        self.dec_conv5a = nn.Conv2d(in_channels=96, out_channels=96,     kernel_size=(3, 3), padding='same')
-        self.dec_conv5b = nn.Conv2d(in_channels=96, out_channels=96,     kernel_size=(3, 3), padding='same')
+        self.dec_conv5a = nn.Conv2d(in_channels=96, out_channels=96,     kernel_size=(3, 3), padding='same', dtype=torch.float)
+        self.dec_conv5b = nn.Conv2d(in_channels=96, out_channels=96,     kernel_size=(3, 3), padding='same', dtype=torch.float)
     
         #concat4
-        self.dec_conv4a = nn.Conv2d(in_channels=144, out_channels=96,    kernel_size=(3, 3), padding='same')
-        self.dec_conv4b = nn.Conv2d(in_channels=96,  out_channels=96,    kernel_size=(3, 3), padding='same')
+        self.dec_conv4a = nn.Conv2d(in_channels=144, out_channels=96,    kernel_size=(3, 3), padding='same', dtype=torch.float)
+        self.dec_conv4b = nn.Conv2d(in_channels=96,  out_channels=96,    kernel_size=(3, 3), padding='same', dtype=torch.float)
     
         #concat3
-        self.dec_conv3a = nn.Conv2d(in_channels=144, out_channels=96,    kernel_size=(3, 3), padding='same')
-        self.dec_conv3b = nn.Conv2d(in_channels=96,  out_channels=96,    kernel_size=(3, 3), padding='same')
+        self.dec_conv3a = nn.Conv2d(in_channels=144, out_channels=96,    kernel_size=(3, 3), padding='same', dtype=torch.float)
+        self.dec_conv3b = nn.Conv2d(in_channels=96,  out_channels=96,    kernel_size=(3, 3), padding='same', dtype=torch.float)
     
         #concat2
-        self.dec_conv2a = nn.Conv2d(in_channels=144, out_channels=96,    kernel_size=(3, 3), padding='same')
-        self.dec_conv2b = nn.Conv2d(in_channels=96,  out_channels=96,    kernel_size=(3, 3), padding='same')
+        self.dec_conv2a = nn.Conv2d(in_channels=144, out_channels=96,    kernel_size=(3, 3), padding='same', dtype=torch.float)
+        self.dec_conv2b = nn.Conv2d(in_channels=96,  out_channels=96,    kernel_size=(3, 3), padding='same', dtype=torch.float)
     
         #concat1
-        self.dec_conv1a = nn.Conv2d(in_channels=96 + 3, out_channels=64, kernel_size=(3, 3), padding='same')
-        self.dec_conv1b = nn.Conv2d(in_channels=64,     out_channels=32, kernel_size=(3, 3), padding='same')
-        self.dec_conv1c = nn.Conv2d(in_channels=32,     out_channels=3,  kernel_size=(3, 3), padding='same')       
+        self.dec_conv1a = nn.Conv2d(in_channels=96 + 3, out_channels=64, kernel_size=(3, 3), padding='same', dtype=torch.float)
+        self.dec_conv1b = nn.Conv2d(in_channels=64,     out_channels=32, kernel_size=(3, 3), padding='same', dtype=torch.float)
+        self.dec_conv1c = nn.Conv2d(in_channels=32,     out_channels=3,  kernel_size=(3, 3), padding='same', dtype=torch.float)
 
         self.leaky_relu = nn.LeakyReLU(negative_slope=0.1)
         self.pool = nn.MaxPool2d(kernel_size=(2, 2))
@@ -59,8 +59,8 @@ class Model(nn.Module):
         print_every = 100
         best_loss = 2e9
 
-        train_input = train_input.double() / 255.0
-        train_target = train_target.double() / 255.0
+        train_input = train_input.float() / 255.0
+        train_target = train_target.float() / 255.0
         train_input = DataLoader(train_input, batch_size=64, shuffle=False)
         train_target = DataLoader(train_target, batch_size=64, shuffle=False)
 
@@ -90,7 +90,7 @@ class Model(nn.Module):
         #: test_input : tensor of size (N1 , C, H, W) that has to be denoised by the trained
         # or the loaded network .
         #: returns a tensor of the size (N1 , C, H, W)
-        test_input = test_input.double() / 255.0
+        test_input = test_input.float() / 255.0
         with torch.no_grad():
             output = self.forward(test_input)
             output = output * 255.0
