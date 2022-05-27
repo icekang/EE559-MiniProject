@@ -7,8 +7,6 @@ from .upsampling import Upsampling
 from .mse import MSE
 
 
-# torch.set_default_dtype(torch.float64)
-# torch.set_default_dtype(torch.float64)
 class Model(Module):
     def __init__(self):
         self.model = Sequential(
@@ -29,27 +27,24 @@ class Model(Module):
 
     def train( self, train_input, train_target, num_epochs ) -> None :
         losses = []
-        mini_batch_size = 1000
+        mini_batch_size = 100
         lr = 0.0001
 
         train_input = train_input.double() / 255.0
         train_target = train_target.double() / 255.0
-        print(train_input.size())
-        print(train_target.size())
         for e in range(num_epochs):
             full_loss = 0
             for b in range(0, train_input.size(0), mini_batch_size):
                 #optimizer.zero_grad()
                 train_batch = train_input[b:b+mini_batch_size,:,:,:]
                 self.model.zero_grad()
-                output = self.forward(train_batch) # (2,batch_size)
+                output = self.forward(train_batch, eval=False) # (2,batch_size)
                 ground_truth = train_target[b:b+mini_batch_size,:,:,:] # (2,batch_size)
 
                 loss = self.criterion.forward(output, ground_truth)
                 full_loss += loss * mini_batch_size
                 loss_grad = self.criterion.backward()
                 self.backward(loss_grad)
-                print(loss, b)
                 for i in range(len(self.model.modules)):
                     layer = self.model.modules[i]
                     if not len(layer.param()): 
@@ -59,19 +54,19 @@ class Model(Module):
 
             if  (e % 5 == 0): 
                 # eval
-                output = self.forward(train_input)
+                # output = self.forward(train_input)
                 print('Epoch {}: train loss-> {}'.format(e,full_loss/train_input.size(0)))
 
             losses.append(full_loss / train_input.size(0))
 
         return losses
 
-    def forward(self, x):
-        return self.model(x)
+    def forward(self, x, eval=False):
+        return self.model(x, eval)
     
     def predict(self, test_input):
         test_input = test_input / 255.0
-        output = self.forward(test_input)
+        output = self.forward(test_input, eval=True)
         output = output * 255.0
         return torch.clip(output, 0.0, 255.0)
 

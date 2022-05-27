@@ -3,29 +3,30 @@ from .module import Module
 
 
 class Sigmoid(Module):
-    def __init__(self):
-        super(Sigmoid).__init__()
+	def __init__(self):
+		super(Sigmoid).__init__()
     
-    def build(self,x):
-        self.input_shape = x.size()
-        self.output_shape = x.size()
-        self.built = True
+	def build(self,x):
+		self.input_shape = x.size()
+		self.output_shape = x.size()
+		self.built = True
     
-    def __call__(self,x):
-        return self.forward(x)
+	def _call_(self,x):
+		return self.forward(x)
 
-    def forward(self,x):
-        self.output = 1.0 / ( 1 + (-x).exp() )
-        #print("self.output",self.output)
-        return self.output
+	def forward(self, x, eval=False):
+		if not eval:
+			self.input = x
+		output = 1.0 / ( 1 + (-x).exp() )
+		#print("self.output",self.output)
+		return output
 
-    def _grad(self, x):
+	def _grad(self, x):
+		return self.forward(x) * (1-self.forward(x))
 
-        return self.forward(x) * (1-self.forward(x))
-
-    def backward(self, gradwrtoutput):
-        #print("self._grad(gradwrtoutput)",self._grad(gradwrtoutput))
-        return  self._grad(gradwrtoutput)
+	def backward(self, gradwrtoutput):
+		#print("self._grad(gradwrtoutput)",self._grad(gradwrtoutput))
+		return  gradwrtoutput * self._grad(self.input)
     
 
 
@@ -34,15 +35,15 @@ class ReLU(Module):
     def __init__(self):
         super(ReLU).__init__()
 
-    def __call__(self,x):
+    def __call__(self, x, eval=False):
         return self.forward(x)
 
-    def forward(self, x):
-        self.input = (x > 0).float() * x
-        return self.input
+    def forward(self, x, eval=False):
+        input = (x > 0) * x
+        return input
 
     def _grad(self, x):
-        return (x > 0).float()
+        return (x > 0)
 
     def backward(self, gradwrtoutput):
-        return gradwrtoutput * self._grad(self.input)
+        return gradwrtoutput * self._grad(gradwrtoutput)

@@ -10,16 +10,16 @@ class Sequential(Module):
 
 		self.modules = []
 
-		for transf in args:
-			self.modules.append(transf)
+		for layer in args:
+			self.modules.append(layer)
 
-	def __call__(self, x):
-		return self.forward(x)
+	def __call__(self, x, eval=False):
+		return self.forward(x, eval)
 
 
-	def forward(self, x):
-		for transf in self.modules:
-			x = transf.forward(x)
+	def forward(self, x, eval=False):
+		for layer in self.modules:
+			x = layer.forward(x, eval)
 		return x
 
 

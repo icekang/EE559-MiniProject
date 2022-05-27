@@ -12,9 +12,9 @@ class Upsampling(Module):
         self.stride = stride
         self.conv = Conv2d(out_channel, in_channel, kernel_size, self.stride, padding = 1)
 
-    def forward(self, x):
-        x = self.nn.forward(x)
-        y = self.conv.forward(x)
+    def forward(self, x, eval=False):
+        x = self.nn.forward(x, eval)
+        y = self.conv.forward(x, eval)
         return y
 
     def backward(self, gradwrtoutput):
@@ -42,7 +42,7 @@ class NNUpsample(Module):
         for i in range(r.shape[1]):
             self.w[i,i,:,:] = 1
 
-    def forward(self, x):
+    def forward(self, x, eval=False):
         self.input_size = x.shape
         self.batch_size = x.size(0)
         self.channels = x.size(1)

@@ -12,7 +12,7 @@ class MSE(Module):
 		output = output.mean()
 		return output
 
-	def backward(self, gradwrtoutput=None):
+	def backward(self):
 		gradwrtinput = self.grad
 		return gradwrtinput
 	
