@@ -1,22 +1,18 @@
-import torch
-from activations import *
-from module import Module
+from .module import Module
 
 class MSE(Module):
-
 	def __init__(self):
 		super(MSE, self).__init__()
-		self.loss = None
 
-	def forward(self,y,y_output):
+	def forward(self, input, target):
+		difference = (input - target)
+		self.grad = 2.0 * (input @ difference)
+		output = difference.pow(2.0)
+		self.grad = self.grad / difference.numel()
+		output = output.mean()
+		return output
 
-		N = y.size(0)
-		l = 1/N*(y-y_output)**2
-		self.loss = l.sum()
-		return self.loss
-
-	def backward(self,y,y_output):
-		# simply gradient of MSE as a function of y_output
-		N = y.size(0)
-		return -2/N*(y-y_output)
+	def backward(self, gradwrtoutput=None):
+		gradwrtinput = self.grad
+		return gradwrtinput
 	

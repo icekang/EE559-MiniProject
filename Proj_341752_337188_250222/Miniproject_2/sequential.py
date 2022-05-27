@@ -1,5 +1,7 @@
 import torch
-from .module import Module, Conv2d, Upsampling
+from .module import Module
+from .convolution import Conv2d
+from .upsampling import  Upsampling
 from pathlib import Path
 
 class Sequential(Module):
