@@ -59,8 +59,8 @@ class Model(nn.Module):
         print_every = 100
         best_loss = 2e9
 
-        train_input = train_input.float() / 255.0
-        train_target = train_target.float() / 255.0
+        train_input = train_input.double() / 255.0
+        train_target = train_target.double() / 255.0
         train_input = DataLoader(train_input, batch_size=64, shuffle=False)
         train_target = DataLoader(train_target, batch_size=64, shuffle=False)
 
@@ -90,7 +90,7 @@ class Model(nn.Module):
         #: test_input : tensor of size (N1 , C, H, W) that has to be denoised by the trained
         # or the loaded network .
         #: returns a tensor of the size (N1 , C, H, W)
-        test_input = test_input.float() / 255.0
+        test_input = test_input.double() / 255.0
         with torch.no_grad():
             output = self.forward(test_input)
             output = output * 255.0
