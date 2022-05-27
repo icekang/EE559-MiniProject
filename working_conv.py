@@ -16,18 +16,7 @@ drive.mount('/content/drive')
 
 cd ..
 
-#!/usr/bin/env python
-# coding: utf-8
 
-# In[32]:
-
-
-#from module import Module
-import torch
-from torch.nn.functional import fold, unfold
-import math
-
-epsilon = 1e-6
 
 class Module:
 
@@ -114,54 +103,4 @@ class Conv2d(Module):
     
 
 
-# In[33]:
-
-
-import torch.nn as nn
-s_1, s_2 = 100,100
-k_1, k_2 = 3,3
-bs = 2
-ch_in, ch_out = 2, 4
-stride = 1
-
-input_shape=(ch_in,s_1,s_2)
-
-# input tensor 
-X = torch.empty(bs, ch_in, s_1, s_2).normal_().requires_grad_()
-X_copy = X.clone().detach().requires_grad_()
-
-# initialize convolution moduls
-conv = Conv2d(input_shape,ch_out, kernel_size = (k_1, k_2), bias=True, stride = stride)
-
-# get weigts and bias
-F = conv.w
-B = conv.bias
-F.requires_grad_()
-B.requires_grad_()
-
-# forward
-out = conv.forward(X)
-out_compare = torch.nn.functional.conv2d(X_copy, F, bias = B, stride = stride, padding=1)
-
-# backward
-dL_dX,dL_dF, dL_dB = conv.backward(out/out)
-print(dL_dF.shape)
-out_compare.backward(out_compare/out_compare)
-
-res1=(out_compare - out).abs().sum()
-res1
-
-print('same output of conv: ', (out_compare - out).abs().sum()) 
-print('same input gradient: ', (X_copy.grad - dL_dX).abs().sum())
-print('same weigth gradient: ',(F.grad-dL_dF).abs().sum() )
-print('same bias gradient: ',(B.grad-dL_dB).abs().sum() )
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
 
