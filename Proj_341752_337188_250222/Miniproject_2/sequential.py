@@ -41,11 +41,11 @@ class Sequential(Module):
 
 		for i, layer in enumerate(self.modules):
 			if isinstance(layer, Conv2d):
-				layer.weight.data = state_dict[i]['weight']
-				layer.bias.data = state_dict[i]['bias']
+				layer.weight.data = state_dict[i]['weight'].to('cpu')
+				layer.bias.data = state_dict[i]['bias'].to('cpu')
 			elif isinstance(layer, Upsampling):
-				layer.conv.weight.data = state_dict[i]['weight']
-				layer.conv.bias.data = state_dict[i]['bias']
+				layer.conv.weight.data = state_dict[i]['weight'].to('cpu')
+				layer.conv.bias.data = state_dict[i]['bias'].to('cpu')
 
 
 	def backward(self,x):
